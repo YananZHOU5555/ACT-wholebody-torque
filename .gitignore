@@ -1,0 +1,47 @@
+# Checkpoints and training outputs
+checkpoints/
+logs/
+*.log
+wandb/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Large data files (if any)
+*.bag
+*.mp4
+*.avi
+data/
+datasets/
+
+# Cache directories
+.cache/
+ACT-wholebody/checkpoint/
+ACT-wholebody/data/
+venv/
+__pycache__/
