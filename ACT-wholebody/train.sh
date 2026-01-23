@@ -14,6 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Project root (ACT-wholebody)
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Log file
+LOG_FILE="${SCRIPT_DIR}/train.log"
+
 # Common configuration
 ACTION_DIM_OFFSET=3   # Skip first 3 dims (base velocity), use 14D arm action
 STEPS=40000
@@ -39,7 +42,11 @@ train_model() {
     echo "========================================"
     echo ""
 
-    python -m lerobot.scripts.lerobot_train \
+    accelerate launch \
+      --multi_gpu \
+      --num_processes=4 \
+      --mixed_precision=fp16 \
+      /workspace/ACT-wholebody-torque/lerobot/src/lerobot/scripts/lerobot_train.py \
       --policy.type=act \
       --dataset.repo_id=${DATASET_NAME} \
       --dataset.root=${DATASET_ROOT} \
@@ -54,8 +61,8 @@ train_model() {
       --log_freq=100 \
       --eval_freq=${SAVE_FREQ} \
       --save_freq=${SAVE_FREQ} \
-      --wandb.enable=true \
-      --policy.repo_id=false
+      --wandb.enable=false \
+      --policy.repo_id=false 2>&1 | tee -a "${LOG_FILE}"
 }
 
 # ============================================

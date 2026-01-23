@@ -178,7 +178,7 @@ def estimate_remaining_time(current_step, total_steps, update_time):
     return remaining_steps * update_time
 
 def main():
-    log_path = '/home/zeno/ACT-wholebody/ACT-wholebody/train.log'
+    log_path = '/workspace/ACT-wholebody-torque/ACT-wholebody/train.log'
     refresh_interval = 2  # seconds
 
     start_time = datetime.now()
