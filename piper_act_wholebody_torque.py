@@ -261,10 +261,17 @@ def unnormalize_action(action: np.ndarray) -> np.ndarray:
 
 # ----------------- Load ACT policy -----------------
 def load_policy(ckpt_dir: str, device: str) -> ACTPolicy:
-    ckpt_path = Path(ckpt_dir).expanduser().resolve()
-    rospy.loginfo(f"Loading ACT Policy from: {ckpt_path}")
+    # Check if it's a HuggingFace repo ID (format: namespace/repo_name)
+    # HF repo IDs contain "/" but don't start with "/" or "~" or "."
+    is_hf_repo = "/" in ckpt_dir and not ckpt_dir.startswith(("/", "~", "."))
 
-    policy = ACTPolicy.from_pretrained(pretrained_name_or_path=str(ckpt_path))
+    if is_hf_repo:
+        rospy.loginfo(f"Loading ACT Policy from HuggingFace: {ckpt_dir}")
+        policy = ACTPolicy.from_pretrained(pretrained_name_or_path=ckpt_dir)
+    else:
+        ckpt_path = Path(ckpt_dir).expanduser().resolve()
+        rospy.loginfo(f"Loading ACT Policy from local: {ckpt_path}")
+        policy = ACTPolicy.from_pretrained(pretrained_name_or_path=str(ckpt_path))
     policy = policy.to(device)
 
     rospy.loginfo("=" * 70)
