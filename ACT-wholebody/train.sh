@@ -32,6 +32,7 @@ train_model() {
     local USE_TORQUE=$1
     local OUTPUT_DIR="${SCRIPT_DIR}/checkpoints/${DATASET_NAME}-torque-${USE_TORQUE}"
     local JOB_NAME="${DATASET_NAME}-torque-${USE_TORQUE}"
+    local HF_REPO_ID="B111ue/${DATASET_NAME}-torque-${USE_TORQUE}"
 
     echo ""
     echo "========================================"
@@ -39,6 +40,7 @@ train_model() {
     echo "  use_torque: ${USE_TORQUE}"
     echo "  steps: ${STEPS}"
     echo "  Output: ${OUTPUT_DIR}"
+    echo "  HF Repo: ${HF_REPO_ID}"
     echo "========================================"
     echo ""
 
@@ -50,7 +52,7 @@ train_model() {
       --policy.type=act \
       --dataset.repo_id=${DATASET_NAME} \
       --dataset.root=${DATASET_ROOT} \
-      --dataset.video_backend=pyav \
+      --dataset.video_backend=torchcodec \
       --output_dir "${OUTPUT_DIR}" \
       --job_name="${JOB_NAME}" \
       --policy.device=cuda \
@@ -62,7 +64,8 @@ train_model() {
       --eval_freq=${SAVE_FREQ} \
       --save_freq=${SAVE_FREQ} \
       --wandb.enable=false \
-      --policy.repo_id=false 2>&1 | tee -a "${LOG_FILE}"
+      --policy.repo_id=${HF_REPO_ID} \
+      --policy.push_to_hub=true 2>&1 | tee -a "${LOG_FILE}"
 }
 
 # ============================================
