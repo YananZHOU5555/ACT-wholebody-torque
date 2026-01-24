@@ -304,10 +304,15 @@ class ACT(nn.Module):
             self.vae_encoder = ACTEncoder(config, is_vae_encoder=True)
             self.vae_encoder_cls_embed = nn.Embedding(1, config.dim_model)
             # Projection layer for joint-space configuration to hidden dimension.
+            # ============== [FULLBODY EXTENSION] ==============
+            # When use_base=True, state input is 17D (3D base + 14D arm)
+            # When use_base=False, state input is still 17D but base part is zeros
             if self.config.robot_state_feature:
+                state_input_dim = self.config.robot_state_feature.shape[0] + 3  # Always 17D (14D arm + 3D base)
                 self.vae_encoder_robot_state_input_proj = nn.Linear(
-                    self.config.robot_state_feature.shape[0], config.dim_model
+                    state_input_dim, config.dim_model
                 )
+            # =================================================
             # Projection layer for action (joint-space target) to hidden dimension.
             # ============== [TORQUE EXTENSION] ==============
             # Use action_dim_offset to skip first N dimensions (e.g., base velocity)
@@ -347,10 +352,14 @@ class ACT(nn.Module):
 
         # Transformer encoder input projections. The tokens will be structured like
         # [latent, (robot_state), (env_state), (image_feature_map_pixels)].
+        # ============== [FULLBODY EXTENSION] ==============
+        # When use_base=True, state input is 17D (3D base + 14D arm)
         if self.config.robot_state_feature:
+            state_input_dim = self.config.robot_state_feature.shape[0] + 3  # Always 17D
             self.encoder_robot_state_input_proj = nn.Linear(
-                self.config.robot_state_feature.shape[0], config.dim_model
+                state_input_dim, config.dim_model
             )
+        # =================================================
         if self.config.env_state_feature:
             self.encoder_env_state_input_proj = nn.Linear(
                 self.config.env_state_feature.shape[0], config.dim_model
@@ -432,7 +441,16 @@ class ACT(nn.Module):
                 self.vae_encoder_cls_embed.weight, "1 d -> b 1 d", b=batch_size
             )  # (B, 1, D)
             if self.config.robot_state_feature:
-                robot_state_embed = self.vae_encoder_robot_state_input_proj(batch[OBS_STATE])
+                # ============== [FULLBODY EXTENSION] ==============
+                # Build 17D state: [base_velocity(3D), arm_state(14D)]
+                arm_state = batch[OBS_STATE]  # (B, 14)
+                if self.config.use_base and "observation.base_velocity" in batch:
+                    base_vel = batch["observation.base_velocity"]  # (B, 3)
+                else:
+                    base_vel = torch.zeros(batch_size, 3, device=arm_state.device, dtype=arm_state.dtype)
+                state_17d = torch.cat([base_vel, arm_state], dim=-1)  # (B, 17)
+                robot_state_embed = self.vae_encoder_robot_state_input_proj(state_17d)
+                # =================================================
                 robot_state_embed = robot_state_embed.unsqueeze(1)  # (B, 1, D)
             action_embed = self.vae_encoder_action_input_proj(batch[ACTION])  # (B, S, D)
 
@@ -483,8 +501,17 @@ class ACT(nn.Module):
         encoder_in_tokens = [self.encoder_latent_input_proj(latent_sample)]
         encoder_in_pos_embed = list(self.encoder_1d_feature_pos_embed.weight.unsqueeze(1))
         # Robot state token.
+        # ============== [FULLBODY EXTENSION] ==============
+        # Build 17D state: [base_velocity(3D), arm_state(14D)]
         if self.config.robot_state_feature:
-            encoder_in_tokens.append(self.encoder_robot_state_input_proj(batch[OBS_STATE]))
+            arm_state = batch[OBS_STATE]  # (B, 14)
+            if self.config.use_base and "observation.base_velocity" in batch:
+                base_vel = batch["observation.base_velocity"]  # (B, 3)
+            else:
+                base_vel = torch.zeros(batch_size, 3, device=arm_state.device, dtype=arm_state.dtype)
+            state_17d = torch.cat([base_vel, arm_state], dim=-1)  # (B, 17)
+            encoder_in_tokens.append(self.encoder_robot_state_input_proj(state_17d))
+        # =================================================
         # ============== [TORQUE EXTENSION] ==============
         # Torque token (always present when robot_state_feature exists)
         if self.config.robot_state_feature:

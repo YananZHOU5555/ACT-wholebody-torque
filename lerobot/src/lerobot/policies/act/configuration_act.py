@@ -145,6 +145,14 @@ class ACTConfig(PreTrainedConfig):
     action_dim_offset: int = 0
     # ================================================
 
+    # ============== [FULLBODY EXTENSION] ==============
+    # Whether to use base velocity information as part of state input.
+    # When True: state = concat([base_velocity(3D), arm_state(14D)]) = 17D
+    # When False: state = concat([zeros(3D), arm_state(14D)]) = 17D (base part padded with zeros)
+    # This allows the model to learn full-body control including base movement.
+    use_base: bool = False
+    # =================================================
+
     # Training preset
     optimizer_lr: float = 1e-5
     optimizer_weight_decay: float = 1e-4
