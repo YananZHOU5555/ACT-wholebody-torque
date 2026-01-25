@@ -13,9 +13,9 @@ from lerobot.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 # DATA SOURCE CONFIGURATION
 # ============================================================
 DATA_SOURCE = "local"
-DATA_ROOT = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data/ACT-20-dataset")
+DATA_ROOT = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data/ACT-120")
 HF_LEROBOT_HOME = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data")
-REPO_NAME = "ACT-20-v30"
+REPO_NAME = "ACT-120-V30"
 TASK_LABEL = "Place the basket on the red marker and pick the yellow pepper into the basket."
 
 # ============================================================
@@ -405,7 +405,7 @@ if __name__ == "__main__":
                 dataset.save_episode()
                 successful_episodes += 1
 
-        dataset.consolidate()
+        # dataset.consolidate()  # Not needed in newer LeRobot versions
 
         total_elapsed = time.time() - total_start_time
         print(f"\n{'=' * 60}")

@@ -2,13 +2,11 @@
 set -e
 
 # ============== [FULLBODY EXTENSION] ==============
-# ACT-fullbody training script - Train 4 configurations
+# ACT-fullbody training script - Train 2 configurations
 #
-# This script trains four models sequentially:
-#   1. baseline:     use_base=false, use_torque=false
-#   2. torque-only:  use_base=false, use_torque=true
-#   3. base-only:    use_base=true,  use_torque=false
-#   4. fullbody:     use_base=true,  use_torque=true
+# This script trains two models sequentially:
+#   1. base-only:    use_base=true,  use_torque=false
+#   2. fullbody:     use_base=true,  use_torque=true
 # ================================================
 
 # Get script directory
@@ -19,12 +17,12 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 LOG_FILE="${SCRIPT_DIR}/train.log"
 
 # Common configuration
-STEPS=10000
-SAVE_FREQ=5000
+STEPS=40000
+SAVE_FREQ=20000
 LOG_FREQ=100
 
-DATASET_NAME="ACT-100-wholebody"
-DATASET_ROOT="${SCRIPT_DIR}/data/ACT-100-wholebody"
+DATASET_NAME="ACT-120-V30"
+DATASET_ROOT="${SCRIPT_DIR}/data/ACT-120-V30"
 
 # HuggingFace token (set via environment variable or huggingface-cli login)
 # export HF_TOKEN="your_token_here"
@@ -69,7 +67,8 @@ train_model() {
       --log_freq ${LOG_FREQ} \
       --eval_freq ${SAVE_FREQ} \
       --save_freq ${SAVE_FREQ} \
-      --wandb.enable false \
+      --wandb.enable true \
+      --wandb.project "ACT-fullbody-120" \
       --policy.repo_id ${HF_REPO_ID} \
       --policy.push_to_hub true 2>&1 | tee -a "${LOG_FILE}"
 
@@ -81,34 +80,18 @@ train_model() {
 echo "ACT-fullbody Training Log - $(date)" > "${LOG_FILE}"
 
 # ============================================
-# Train Model 1: baseline (use_base=false, use_torque=false)
+# Train Model 1: base-only (use_base=true, use_torque=false)
 # ============================================
 echo "============================================"
-echo "  Step 1/4: Training baseline"
-echo "============================================"
-train_model false false "baseline"
-
-# ============================================
-# Train Model 2: torque-only (use_base=false, use_torque=true)
-# ============================================
-echo "============================================"
-echo "  Step 2/4: Training torque-only"
-echo "============================================"
-train_model false true "torque-only"
-
-# ============================================
-# Train Model 3: base-only (use_base=true, use_torque=false)
-# ============================================
-echo "============================================"
-echo "  Step 3/4: Training base-only"
+echo "  Step 1/2: Training base-only"
 echo "============================================"
 train_model true false "base-only"
 
 # ============================================
-# Train Model 4: fullbody (use_base=true, use_torque=true)
+# Train Model 2: fullbody (use_base=true, use_torque=true)
 # ============================================
 echo "============================================"
-echo "  Step 4/4: Training fullbody"
+echo "  Step 2/2: Training fullbody"
 echo "============================================"
 train_model true true "fullbody"
 
@@ -123,10 +106,8 @@ python "${SCRIPT_DIR}/plot_loss_comparison.py"
 echo ""
 echo "========================================"
 echo "All training completed!"
-echo "  Model 1: checkpoints/ACT-fullbody-baseline"
-echo "  Model 2: checkpoints/ACT-fullbody-torque-only"
-echo "  Model 3: checkpoints/ACT-fullbody-base-only"
-echo "  Model 4: checkpoints/ACT-fullbody-fullbody"
+echo "  Model 1: checkpoints/ACT-fullbody-base-only"
+echo "  Model 2: checkpoints/ACT-fullbody-fullbody"
 echo ""
 echo "Loss comparison plot: loss_comparison.png"
 echo "========================================"
