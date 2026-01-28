@@ -13,7 +13,7 @@ from lerobot.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 # DATA SOURCE CONFIGURATION
 # ============================================================
 DATA_ROOT = Path("/workspace/ACT-wholebody-torque/ACT-wholebody/data/ACT-20-dataset")
-HF_LEROBOT_HOME = Path("/workspace/ACT-wholebody-torque/ACT-wholebody/data")
+HF_LEROBOT_HOME = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data")
 REPO_NAME = "ACT-20-V30-fixed"
 TASK_LABEL = "Place the basket on the red marker and pick the yellow pepper into the basket."
 
@@ -41,7 +41,7 @@ END_POSE_RIGHT = "/robot/arm_right/end_pose"
 # ============================================================
 FPS = 10
 IMG_SIZE = (224, 224)
-NUM_WORKERS = 16  # Increased worker count
+NUM_WORKERS = 8  # Reduced to avoid video encoding issues
 
 
 def decode_compressed_image(msg):
@@ -222,13 +222,8 @@ def process_single_bag(args):
                 action_left = np.array(action_left_msg.position, dtype=np.float32)[:7]
                 action_right = np.array(action_right_msg.position, dtype=np.float32)[:7]
 
-                # Cmd_vel (base action: vx, vy, omega)
-                idx_cmd = nearest_idx(cmd_vel_times, t_frame)
-                cmd_vel_msg = cmd_vel_msgs[idx_cmd][1]
-                action_base_vx = float(cmd_vel_msg.linear.x)
-                action_base_vy = float(cmd_vel_msg.linear.y)
-                action_base_omega = float(cmd_vel_msg.angular.z)
-                action_base = np.array([action_base_vx, action_base_vy, action_base_omega], dtype=np.float32)  # 3D
+                # Base action from odom (cmd_vel has no data in recorded bags)
+                action_base = np.array([base_vx, base_vy, base_omega], dtype=np.float32)  # 3D
 
                 # Assemble 17D action: [base_vx, base_vy, base_omega, left_arm, right_arm]
                 action_17d = np.concatenate([action_base, action_left, action_right])  # 17D
@@ -324,6 +319,7 @@ if __name__ == "__main__":
 
     dataset = LeRobotDataset.create(
         repo_id=REPO_NAME,
+        root=output_path,
         robot_type="zeno",
         fps=FPS,
         features=features,
