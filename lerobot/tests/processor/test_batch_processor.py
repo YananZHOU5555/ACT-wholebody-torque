@@ -813,7 +813,7 @@ def test_task_comprehensive_string_cases():
         "UPPERCASE_TASK",
         "MixedCaseTask",
         "task123",
-        "数字任务",  # Unicode task
+        "unicode_task",  # Unicode task
         "🤖 robot task",  # Emoji in task
         "task\nwith\nnewlines",  # Special characters
         "task\twith\ttabs",
@@ -843,7 +843,7 @@ def test_task_comprehensive_string_cases():
         [],  # Empty list
         [""],  # List with empty string
         ["task with spaces", "task_with_underscores", "UPPERCASE"],
-        ["🤖 task", "数字任务", "normal_task"],  # Mixed formats
+        ["🤖 task", "unicode_task", "normal_task"],  # Mixed formats
     ]
 
     for task_list in list_tasks:

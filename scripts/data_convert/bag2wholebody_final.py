@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 import time
 import os
-from multiprocessing import Manager
+from multiprocessing import Manager, Pool
 
 from rosbags.highlevel import AnyReader
 from lerobot.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
@@ -12,32 +12,32 @@ from lerobot.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 # ============================================================
 # DATA SOURCE CONFIGURATION
 # ============================================================
-DATA_SOURCE = "local"
-DATA_ROOT = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data/ACT-120")
-HF_LEROBOT_HOME = Path("/workspace/ACT-wholebody-torque/ACT-fullbody/data")
-REPO_NAME = "ACT-120-V30"
+# Get project root directory
+SCRIPT_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+
+# Data path configuration (modify according to your setup)
+DATA_ROOT = PROJECT_ROOT / "data" / "ACT-fianl"  # Original bag file directory
+HF_LEROBOT_HOME = PROJECT_ROOT / "data"          # Output directory
+REPO_NAME = "ACT-final-V30"                       # Dataset name
 TASK_LABEL = "Place the basket on the red marker and pick the yellow pepper into the basket."
 
 # ============================================================
 # ROS TOPICS
 # ============================================================
-# Cameras
 CAM_WRIST_LEFT = "/realsense_left/color/image_raw/compressed"
 CAM_WRIST_RIGHT = "/realsense_right/color/image_raw/compressed"
 CAM_WIDE_TOP = "/realsense_top/color/image_raw/compressed"
 CAM_MAIN = CAM_WIDE_TOP
 
-# Arm states and actions
 STATE_LEFT = "/robot/arm_left/joint_states_single"
 STATE_RIGHT = "/robot/arm_right/joint_states_single"
 ACTION_LEFT = "/teleop/arm_left/joint_states_single"
 ACTION_RIGHT = "/teleop/arm_right/joint_states_single"
 
-# Mobile base (NEW)
 ODOM_TOPIC = "/ranger_base_node/odom"
 TELEOP_CMD_VEL = "/teleop/cmd_vel"
 
-# Optional end poses
 END_POSE_LEFT = "/robot/arm_left/end_pose"
 END_POSE_RIGHT = "/robot/arm_right/end_pose"
 
@@ -46,7 +46,7 @@ END_POSE_RIGHT = "/robot/arm_right/end_pose"
 # ============================================================
 FPS = 10
 IMG_SIZE = (224, 224)
-NUM_WORKERS = 1
+NUM_WORKERS = 2  # Reduced to avoid memory issues
 
 
 def decode_compressed_image(msg):
@@ -70,15 +70,6 @@ def nearest_idx(times, t):
     return idx if abs(after - t) < abs(t - before) else idx - 1
 
 
-def quaternion_to_yaw(quat):
-    """Convert quaternion to yaw angle (orientation.z, orientation.w)."""
-    # quat: geometry_msgs/Quaternion with x, y, z, w
-    # Yaw (z-axis rotation) = atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2))
-    w, x, y, z = quat.w, quat.x, quat.y, quat.z
-    yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y**2 + z**2))
-    return yaw
-
-
 def collect_bag_files():
     """Collect all .bag files from local directory."""
     if not DATA_ROOT.exists():
@@ -89,19 +80,16 @@ def collect_bag_files():
     if not bag_files:
         print(f"Warning: No .bag files found in {DATA_ROOT}")
     else:
-        print(f"Found {len(bag_files)} bag file(s) in {DATA_ROOT}:")
-        for bag_file in bag_files:
-            print(f"  - {bag_file.name}")
+        print(f"Found {len(bag_files)} bag file(s) in {DATA_ROOT}")
 
     return bag_files
 
 
 def process_single_bag(args):
     """Process a single bag file and return episode data."""
-    bag_path, task_name, bag_idx, total_bags, progress_dict, lock = args
+    bag_path, task_name, bag_idx, total_bags = args
 
-    with lock:
-        print(f"\n[Bag {bag_idx}/{total_bags}] Processing: {bag_path.name}")
+    print(f"[Bag {bag_idx}/{total_bags}] Processing: {bag_path.name}")
 
     bag_start_time = time.time()
 
@@ -110,15 +98,14 @@ def process_single_bag(args):
             interested_topics = {
                 CAM_MAIN, CAM_WRIST_LEFT, CAM_WRIST_RIGHT, CAM_WIDE_TOP,
                 STATE_LEFT, STATE_RIGHT, ACTION_LEFT, ACTION_RIGHT,
-                ODOM_TOPIC, TELEOP_CMD_VEL,  # NEW
+                ODOM_TOPIC, TELEOP_CMD_VEL,
                 END_POSE_LEFT, END_POSE_RIGHT,
             }
             topic_to_msgs = {topic: [] for topic in interested_topics}
 
             connections = [c for c in reader.connections if c.topic in interested_topics]
             if not connections:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: No relevant topics found, skipping.")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: No relevant topics found, skipping.")
                 return None
 
             for conn, t, raw in reader.messages(connections=connections):
@@ -136,29 +123,24 @@ def process_single_bag(args):
             state_right_msgs = topic_to_msgs[STATE_RIGHT]
             action_left_msgs = topic_to_msgs[ACTION_LEFT]
             action_right_msgs = topic_to_msgs[ACTION_RIGHT]
-            odom_msgs = topic_to_msgs[ODOM_TOPIC]  # NEW
-            cmd_vel_msgs = topic_to_msgs[TELEOP_CMD_VEL]  # NEW
+            odom_msgs = topic_to_msgs[ODOM_TOPIC]
+            cmd_vel_msgs = topic_to_msgs[TELEOP_CMD_VEL]
 
             # Validation
             if not cam_main_msgs or not cam_wrist_left_msgs:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing camera data, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing camera data, skipping")
                 return None
             if not state_left_msgs or not state_right_msgs:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing state data, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing state data, skipping")
                 return None
             if not action_left_msgs or not action_right_msgs:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing action data, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing action data, skipping")
                 return None
             if not odom_msgs:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing odom data, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing odom data, skipping")
                 return None
             if not cmd_vel_msgs:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing cmd_vel data, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Missing cmd_vel data, skipping")
                 return None
 
             # Extract timestamps
@@ -170,38 +152,33 @@ def process_single_bag(args):
             state_right_times = np.array([t for t, _ in state_right_msgs], dtype=np.int64)
             action_left_times = np.array([t for t, _ in action_left_msgs], dtype=np.int64)
             action_right_times = np.array([t for t, _ in action_right_msgs], dtype=np.int64)
-            odom_times = np.array([t for t, _ in odom_msgs], dtype=np.int64)  # NEW
-            cmd_vel_times = np.array([t for t, _ in cmd_vel_msgs], dtype=np.int64)  # NEW
+            odom_times = np.array([t for t, _ in odom_msgs], dtype=np.int64)
+            cmd_vel_times = np.array([t for t, _ in cmd_vel_msgs], dtype=np.int64)
 
             # Find common time range
             t_start = max(cam_main_times[0], wrist_left_times[0], state_left_times[0])
             t_end = min(cam_main_times[-1], wrist_left_times[-1], state_left_times[-1])
 
             if t_end <= t_start:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: Non-positive duration, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: Non-positive duration, skipping")
                 return None
 
             common_duration = (t_end - t_start) / 1e9
-            with lock:
-                print(f"[Bag {bag_idx}/{total_bags}] Common time range: {common_duration:.2f} seconds")
+            print(f"[Bag {bag_idx}/{total_bags}] Common time range: {common_duration:.2f} seconds")
 
             # Generate uniform timestamps
             min_dt = int(1e9 / FPS)
             num_frames = int((t_end - t_start) / min_dt)
             if num_frames <= 0:
-                with lock:
-                    print(f"[Bag {bag_idx}/{total_bags}] Warning: num_frames <= 0, skipping")
+                print(f"[Bag {bag_idx}/{total_bags}] Warning: num_frames <= 0, skipping")
                 return None
 
             uniform_timestamps = np.linspace(t_start, t_end, num_frames, dtype=np.int64)
 
-            with lock:
-                print(f"[Bag {bag_idx}/{total_bags}] Generating {num_frames} frames at {FPS} FPS")
+            print(f"[Bag {bag_idx}/{total_bags}] Generating {num_frames} frames at {FPS} FPS")
 
             # Process frames
             episode_frames = []
-            start_time = time.time()
 
             for frame_count, t_frame in enumerate(uniform_timestamps, 1):
                 # Images
@@ -250,13 +227,8 @@ def process_single_bag(args):
                 action_left = np.array(action_left_msg.position, dtype=np.float32)[:7]
                 action_right = np.array(action_right_msg.position, dtype=np.float32)[:7]
 
-                # Cmd_vel (base action: vx, vy, omega)
-                idx_cmd = nearest_idx(cmd_vel_times, t_frame)
-                cmd_vel_msg = cmd_vel_msgs[idx_cmd][1]
-                action_base_vx = float(cmd_vel_msg.linear.x)
-                action_base_vy = float(cmd_vel_msg.linear.y)
-                action_base_omega = float(cmd_vel_msg.angular.z)
-                action_base = np.array([action_base_vx, action_base_vy, action_base_omega], dtype=np.float32)  # 3D
+                # Base action from odom (cmd_vel has no data in recorded bags)
+                action_base = np.array([base_vx, base_vy, base_omega], dtype=np.float32)  # 3D
 
                 # Assemble 17D action: [base_vx, base_vy, base_omega, left_arm, right_arm]
                 action_17d = np.concatenate([action_base, action_left, action_right])  # 17D
@@ -277,19 +249,15 @@ def process_single_bag(args):
 
                 episode_frames.append(frame)
 
-            elapsed = time.time() - start_time
-            with lock:
-                print(f"  [Bag {bag_idx}/{total_bags}] ✓ Completed in {elapsed:.1f}s ({num_frames} frames)")
-                progress_dict["completed"] += 1
-                print(f"  Progress: {progress_dict['completed']}/{total_bags} bags completed")
+            elapsed = time.time() - bag_start_time
+            print(f"[Bag {bag_idx}/{total_bags}] ✓ Completed in {elapsed:.1f}s ({num_frames} frames)")
 
             return episode_frames
 
     except Exception as e:
-        with lock:
-            print(f"[Bag {bag_idx}/{total_bags}] Error: {e}")
-            import traceback
-            traceback.print_exc()
+        print(f"[Bag {bag_idx}/{total_bags}] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -356,19 +324,21 @@ if __name__ == "__main__":
 
     dataset = LeRobotDataset.create(
         repo_id=REPO_NAME,
+        root=output_path,
         robot_type="zeno",
         fps=FPS,
         features=features,
         use_videos=True,
-        image_writer_threads=4,
-        image_writer_processes=4,
+        image_writer_threads=8,
+        image_writer_processes=8,
     )
 
     print(f"\n{'=' * 60}")
-    print(f"Converting to ACT-wholebody format (17D actions)")
+    print(f"Converting ACT-20 to LeRobot format (17D actions)")
     print(f"Task: {TASK_LABEL}")
     print(f"Data path: {DATA_ROOT}")
     print(f"Output: {output_path}")
+    print(f"Workers: {NUM_WORKERS}")
     print(f"{'=' * 60}")
 
     bag_files = collect_bag_files()
@@ -377,35 +347,22 @@ if __name__ == "__main__":
     if total_bags == 0:
         print("No bag files to process.")
     else:
-        manager = Manager()
-        progress_dict = manager.dict()
-        progress_dict["completed"] = 0
-        lock = manager.Lock()
-
-        bag_args = [
-            (bag_path, TASK_LABEL, bag_idx, total_bags, progress_dict, lock)
-            for bag_idx, bag_path in enumerate(bag_files, 1)
-        ]
-
-        print(f"\nProcessing {total_bags} bags...")
-
-        results = []
-        for args in bag_args:
-            results.append(process_single_bag(args))
-
-        print(f"\n{'=' * 60}")
-        print("Adding episodes to dataset...")
-        print(f"{'=' * 60}")
+        print(f"\nProcessing {total_bags} bags sequentially (to save memory)...")
 
         successful_episodes = 0
-        for result in results:
+        for bag_idx, bag_path in enumerate(bag_files, 1):
+            bag_args = (bag_path, TASK_LABEL, bag_idx, total_bags)
+            result = process_single_bag(bag_args)
+
             if result is not None:
                 for frame in result:
                     dataset.add_frame(frame)
                 dataset.save_episode()
                 successful_episodes += 1
+                print(f"[Bag {bag_idx}/{total_bags}] Saved to dataset, memory released")
 
-        # dataset.consolidate()  # Not needed in newer LeRobot versions
+            # Explicitly release memory
+            del result
 
         total_elapsed = time.time() - total_start_time
         print(f"\n{'=' * 60}")
