@@ -3,14 +3,16 @@
 # ============================================
 
 # ============================================
-# Data (not open source)
+# Data (not open source, keep folder structure)
 # ============================================
-data/
+data/*
+!data/.gitkeep
 
 # ============================================
-# Models (download from HuggingFace)
+# Models (download from HuggingFace, keep folder structure)
 # ============================================
-models/
+models/*
+!models/.gitkeep
 
 # ============================================
 # Training outputs
