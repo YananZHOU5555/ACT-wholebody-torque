@@ -6,7 +6,7 @@ ACT (Action Chunking Transformer) whole-body control extension based on LeRobot 
 
 - 17D whole-body control: 3D base velocity + 14D dual-arm joints
 - Torque information fusion: utilizing joint torque to improve control precision
-- 4-camera visual input: top + left wrist + right wrist + auxiliary camera
+- 3-camera visual input: top + left wrist + right wrist
 
 ## Quick Start
 
@@ -148,7 +148,7 @@ action_dim_offset: int = 0    # Action dimension offset
 | observation.state | 14D | [left_joints x7, right_joints x7] |
 | observation.effort | 14D | [left_effort x7, right_effort x7] |
 | observation.base_velocity | 3D | [base_vx, base_vy, base_omega] |
-| observation.images.* | 224x224x3 | RGB image |
+| observation.images.* | 224x224x3 | RGB images from 3 cameras (top, left wrist, right wrist) |
 
 ## License
 
