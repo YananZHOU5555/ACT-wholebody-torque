@@ -12,7 +12,7 @@ This document provides a comprehensive summary of all hyperparameters used in ou
 | Pretrained Weights | ImageNet1K_V1 | Pretrained on ImageNet-1K dataset |
 | Replace Final Stride with Dilation | False | Whether to use dilated convolution in final layer |
 | Input Image Size | 224 × 224 × 3 | RGB image resolution |
-| Number of Cameras | 4 | Top, left wrist, right wrist, auxiliary |
+| Number of Cameras | 3 | Top, left wrist, right wrist |
 | Image Normalization | ImageNet Mean/Std | Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225] |
 
 ### 1.2 Transformer Encoder
@@ -66,7 +66,7 @@ This document provides a comprehensive summary of all hyperparameters used in ou
 | observation.velocity | 14D | Joint velocities (left arm 7D + right arm 7D) |
 | observation.effort | 14D | Joint torques (left arm 7D + right arm 7D) |
 | observation.base_velocity | 3D | Base velocity (vx, vy, omega) |
-| observation.images.* | 224 × 224 × 3 | RGB images from 4 cameras |
+| observation.images.* | 224 × 224 × 3 | RGB images from 3 cameras |
 
 ### 2.2 Action Space
 
@@ -195,7 +195,7 @@ $$\mathcal{L} = \mathcal{L}_{L1} + \lambda_{KL} \cdot \mathcal{L}_{KL}$$
 | | Dropout | 0.1 |
 | **Data** | | |
 | | Image Size | 224 × 224 |
-| | Number of Cameras | 4 |
+| | Number of Cameras | 3 |
 | | State Dimension | 14D (arm) + 3D (base) |
 | | Action Dimension | 17D |
 | | Control Frequency | 10 Hz |
